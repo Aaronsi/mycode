@@ -1,0 +1,3 @@
+[workspace]
+members = ["gba"]
+resolver = "2"
