@@ -1,22 +1,40 @@
-[package]
-name = "gba"
+[workspace]
+resolver = "2"
+members = [
+    "crates/gba-core",
+    "crates/gba-pm",
+    "apps/gba-cli",
+]
+
+[workspace.package]
 version = "0.1.0"
 authors = ["Your Name <YourName@yourdomain.com>"]
-edition = "2024"
+edition = "2021"
 license = "MIT"
-documentation = "https://docs.rs/"
 repository = "https://github.com/TODO"
 homepage = "https://github.com/TODO"
-description = """
 
-"""
-readme = "README.md"
-categories = ["development-tools"]
-keywords = []
+[workspace.dependencies]
+# Core dependencies
+anyhow = "1.0"
+thiserror = "2.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 
-[dependencies]
-anyhow = "1.0.98"
-serde = { version = "1.0.219", features = ["derive"] }
-serde_json = "1.0.142"
-thiserror = "2.0.12"
-tokio = { version = "1.47.1", features = ["rt", "rt-multi-thread", "macros"] }
+# Async runtime
+tokio = { version = "1.49", features = ["rt", "rt-multi-thread", "macros", "fs", "io-util"] }
+
+# Claude Agent SDK
+claude-agent-sdk-rs = "0.6"
+
+# CLI dependencies
+clap = { version = "4.5", features = ["derive", "cargo", "env"] }
+ratatui = "0.29"
+crossterm = "0.28"
+
+# Template engine
+minijinja = { version = "2.15", features = ["loader"] }
+
+# Internal workspace crates
+gba-core = { path = "crates/gba-core" }
+gba-pm = { path = "crates/gba-pm" }

@@ -1,0 +1,24 @@
+[package]
+name = "gba-cli"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Command line interface for Geektime Bootcamp Agent"
+
+[[bin]]
+name = "gba"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+tokio = { workspace = true }
+clap = { workspace = true }
+ratatui = { workspace = true }
+crossterm = { workspace = true }
+
+# Internal dependencies
+gba-core = { workspace = true }
+gba-pm = { workspace = true }

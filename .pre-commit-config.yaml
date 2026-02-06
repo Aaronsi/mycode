@@ -24,7 +24,7 @@ repos:
         name: cargo fmt
         description: Format files with rustfmt.
         entry: cargo
-        args: ["fmt", "--", "--check"]
+        args: ["fmt", "--manifest-path", "gba/Cargo.toml", "--all", "--", "--check"]
         language: system
         files: \.rs$
         pass_filenames: false
@@ -36,7 +36,7 @@ repos:
         # fetching the RustSec advisory database during git commit.
         # Security advisories can still be checked manually via:
         #   cargo deny check advisories
-        args: ["deny", "check", "licenses", "bans", "sources"]
+        args: ["deny", "--manifest-path", "gba/Cargo.toml", "check", "licenses", "bans", "sources"]
         language: system
         files: \.rs$
         pass_filenames: false
@@ -51,7 +51,7 @@ repos:
         name: cargo check
         description: Check the package for errors.
         entry: cargo
-        args: ["check", "--all"]
+        args: ["check", "--manifest-path", "gba/Cargo.toml", "--all"]
         language: system
         files: \.rs$
         pass_filenames: false
@@ -62,6 +62,8 @@ repos:
         args:
           [
             "clippy",
+            "--manifest-path",
+            "gba/Cargo.toml",
             "--all-targets",
             "--all-features",
             "--tests",
@@ -77,7 +79,7 @@ repos:
         name: cargo test
         description: unit test for the project
         entry: cargo
-        args: ["nextest", "run", "--all-features", "--", "--include-ignored"]
+        args: ["nextest", "run", "--manifest-path", "gba/Cargo.toml", "--all-features", "--", "--include-ignored"]
         language: system
         files: \.rs$
         pass_filenames: false
