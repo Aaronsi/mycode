@@ -801,13 +801,12 @@ impl PromptManager {
 pub struct PromptContext {
     pub repo_path: String,
     pub feature_slug: String,
+    pub feature_id: String,
     pub phase: Option<String>,
-    pub specs: String,
-    pub verification_criteria: String,
-    pub previous_output: String,
-    pub coding_standards: String,
-    pub readme: String,
-    pub resume_info: Option<ResumeContext>,
+    // Note: Following "convention over configuration" principle
+    // Most context is loaded on-demand by AI reading files directly
+    // Only essential variables are pre-loaded
+    pub extra: HashMap<String, Value>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -819,13 +818,17 @@ pub struct ResumeContext {
 }
 
 impl PromptContext {
-    pub fn new(repo_path: String, feature_slug: String) -> Self;
+    pub fn new(repo_path: String, feature_slug: String, feature_id: String) -> Self;
 
-    /// Load context from feature directory and repository
+    /// Load minimal context - AI reads files as needed
+    /// This follows "convention over configuration" principle from design_by_tyrchen.md
     pub fn load(feature_path: &Path, repo_path: &Path) -> Result<Self>;
 
     /// Add resume information when resuming execution
     pub fn with_resume_info(mut self, resume: ResumeContext) -> Self;
+
+    /// Add extra context variables
+    pub fn with_extra(mut self, key: String, value: Value) -> Self;
 }
 ```
 
@@ -1058,92 +1061,115 @@ impl PromptContext {
 ```
 
 **Convention over Configuration**:
-- `specs` → Always read from `<feature>/specs/design.md`
-- `verification_criteria` → Always read from `<feature>/specs/verification.md`
-- `coding_standards` → Always read from `<repo>/CLAUDE.md`
-- `readme` → Always read from `<repo>/README.md`
-- Missing files result in empty strings (no errors)
-- No optional fields or conditionals in templates
-```
+- Minimal template variables: `repo_path`, `feature_slug`, `feature_id`
+- AI reads files on-demand using Read tool (not pre-loaded)
+- Standard file locations (following design_by_tyrchen.md):
+  - Design spec: `.gba/{feature_id}_{feature_slug}/specs/design.md`
+  - Verification: `.gba/{feature_id}_{feature_slug}/specs/verification.md`
+  - Coding standards: `CLAUDE.md`
+  - Repository docs: `.gba.md`
+  - State: `.gba/{feature_id}_{feature_slug}/state.yml`
+- Templates guide AI on what to read and where to find it
+- No optional fields or complex conditionals
+- Extra context passed via `extra` HashMap when needed
 
 #### 3.2.3 Template Examples
 
-**Plan Template** (`.gba/prompts/plan.md`):
+**Simplified Template Approach** (following design_by_tyrchen.md):
+
+Templates use minimal variables. AI reads files directly using Read tool when needed.
+
+**Plan Template** (`prompts/plan/user.md`):
 ```jinja2
 # Feature Planning: {{ feature_slug }}
 
-You are helping plan a new feature for the repository at: {{ repo_path }}
-
-## Feature Description
-{% if description %}
-{{ description }}
-{% else %}
-Please ask the user to describe the feature they want to implement.
-{% endif %}
+Repository: {{ repo_path }}
+Feature ID: {{ feature_id }}
 
 ## Your Task
+
+You are helping plan a new feature. Please:
+
 1. Ask clarifying questions about:
    - Feature requirements and scope
    - Technical approach and architecture
    - Testing strategy
    - Documentation needs
 
-2. Create a detailed plan including:
-   - Design document (specs/design.md)
-   - Verification criteria (specs/verification.md)
-   - Implementation phases
+2. Read relevant files to understand the codebase:
+   - Use Read tool to read README.md, CLAUDE.md, .gba.md
+   - Use Glob/Grep to explore the codebase structure
+   - Understand existing patterns and conventions
 
-## Repository Context
-{% if extra.readme %}
-### README
-{{ extra.readme | indent(4) }}
+3. Create a detailed plan:
+   - Write specs/design.md with architecture and implementation details
+   - Write specs/verification.md with test criteria
+   - Identify files to create/modify
+
+4. When plan is approved, write the spec files to:
+   - .gba/{{ feature_id }}_{{ feature_slug }}/specs/design.md
+   - .gba/{{ feature_id }}_{{ feature_slug }}/specs/verification.md
+
+{% if extra.resume_info %}
+## Resume Information
+This is a resumed session.
+Last completed phase: {{ extra.resume_info.last_completed_phase }}
+Interrupted at: {{ extra.resume_info.interrupted_at }}
+Reason: {{ extra.resume_info.interrupt_reason }}
 {% endif %}
-
-{% if extra.architecture %}
-### Architecture
-{{ extra.architecture | indent(4) }}
-{% endif %}
-
-## Available Files
-{% for file in list_files(repo_path, "**/*.rs") %}
-- {{ file }}
-{% endfor %}
 
 Please start by asking questions to understand the feature requirements.
 ```
 
-**Phase Template** (`.gba/prompts/phase_2_build.md`):
+**Build Template** (`prompts/build/user.md`):
 ```jinja2
-# Phase 2: Build Implementation
+# Phase: Build Implementation
 
-## Feature: {{ feature_slug }}
 Repository: {{ repo_path }}
-
-## Design Specification
-{{ specs }}
-
-## Previous Phase Output
-{% if previous_output %}
-{{ previous_output | indent(4) }}
-{% else %}
-No previous output available.
-{% endif %}
+Feature: {{ feature_slug }} (ID: {{ feature_id }})
 
 ## Your Task
+
 Implement the feature according to the design specification.
 
-### Requirements
-1. Follow the design document exactly
-2. Write clean, idiomatic Rust code
-3. Add appropriate error handling
-4. Include inline documentation
-5. Follow the project's coding standards
+### Steps
 
-### Project Standards
-{{ read_file(repo_path ~ "/CLAUDE.md") | indent(4) }}
+1. Read the design specification:
+   - .gba/{{ feature_id }}_{{ feature_slug }}/specs/design.md
 
-### Files to Modify
-{% if extra.files_to_modify %}
+2. Read project standards:
+   - CLAUDE.md (coding standards)
+   - .gba.md (repository structure)
+
+3. Implement the feature:
+   - Follow the design document
+   - Write clean, idiomatic Rust code
+   - Add appropriate error handling
+   - Include inline documentation
+   - Follow project coding standards
+
+4. Commit your changes with descriptive messages
+
+{% if extra.previous_output %}
+## Previous Phase Output
+{{ extra.previous_output }}
+{% endif %}
+
+{% if extra.resume_info %}
+## Resume Information
+Resuming from interruption.
+Last completed phase: {{ extra.resume_info.last_completed_phase }}
+{% endif %}
+
+Begin implementation now.
+```
+
+**Key Principles**:
+- Minimal template variables (repo_path, feature_slug, feature_id)
+- AI reads files using Read tool when needed
+- No auto-loading of specs, readme, standards
+- Templates guide AI on what to read and where
+- Follows "convention over configuration" principle
 {% for file in extra.files_to_modify %}
 - {{ file }}
 {% endfor %}
@@ -1617,20 +1643,6 @@ resume:
 # Error information (if failed)
 error: null
 ```
-    description: "Build implementation"
-
-  - name: "test"
-    prompt_template: "phase_3_test.md"
-    description: "Write and run tests"
-
-  - name: "review"
-    prompt_template: "phase_4_review.md"
-    description: "Code review and refinement"
-
-  - name: "pr"
-    prompt_template: "phase_5_pr.md"
-    description: "Create pull request"
-```
 
 ## 5. Key Workflows
 
@@ -1643,32 +1655,35 @@ User: $ gba init
   │   └─▶ If exists and not --force: Error
   │
   ├─▶ Create .gba directory structure
-  │   ├─▶ Create prompts/ directory
-  │   ├─▶ Copy default prompt templates
-  │   ├─▶ Create features/ directory
-  │   └─▶ Create config.yaml
+  │   ├─▶ Create .gba/ directory
+  │   ├─▶ Create .trees/ directory
+  │   └─▶ Create default config.yml
   │
-  ├─▶ Create .trees/ directory (for git worktrees)
-  │
-  ├─▶ Analyze repository structure
-  │   ├─▶ Identify key directories
-  │   ├─▶ Identify main technologies
-  │   └─▶ Understand project structure
-  │
-  ├─▶ Generate .gba.md (repository documentation)
-  │   ├─▶ Repository overview
-  │   ├─▶ Directory structure
-  │   ├─▶ Key technologies
-  │   └─▶ Development guidelines
-  │
-  ├─▶ Update CLAUDE.md (if exists)
-  │   └─▶ Add reference to .gba.md
+  ├─▶ Analyze repository (using init task)
+  │   ├─▶ Load prompts/init/config.yml
+  │   ├─▶ Load prompts/init/system.md + user.md
+  │   ├─▶ Execute with Claude Agent SDK
+  │   └─▶ AI generates:
+  │       ├─▶ .gba.md (repository documentation)
+  │       └─▶ Updates CLAUDE.md (if exists)
   │
   ├─▶ Update .gitignore
-  │   ├─▶ Add .gba/features/*/trees/
-  │   └─▶ Add .trees/
+  │   └─▶ Add .trees/ to .gitignore
   │
   └─▶ Success message
+```
+
+**Output**:
+```
+$ gba init
+Initializing GBA for current project...
+✓ Created .gba/ directory
+✓ Created .trees/ directory
+✓ Analyzed repository structure
+✓ Generated .gba.md
+✓ Updated CLAUDE.md
+✓ Updated .gitignore
+Done! Project initialized.
 ```
 
 ### 5.2 Plan Workflow
@@ -1683,41 +1698,82 @@ User: $ gba plan <feature-slug>
   │   └─▶ Get next sequential ID (0001, 0002, etc.)
   │
   ├─▶ Create feature directory
-  │   └─▶ .gba/features/<id>_<feature-slug>/
+  │   └─▶ .gba/<id>_<feature-slug>/
+  │       ├─▶ specs/
+  │       └─▶ docs/
   │
   ├─▶ Create git worktree (if enabled in config)
   │   ├─▶ Create branch: feature/<id>-<slug>
   │   ├─▶ Create worktree in .trees/<id>_<slug>/
   │   └─▶ Switch to worktree directory
   │
-  ├─▶ Load plan prompt template (gba-pm)
+  ├─▶ Load plan task configuration
+  │   ├─▶ Load prompts/plan/config.yml
+  │   ├─▶ Load prompts/plan/system.md + user.md
+  │   └─▶ Render with context (repo_path, feature_slug, feature_id)
   │
-  ├─▶ Start interactive planning session
+  ├─▶ Start interactive planning session (ratatui TUI)
   │   │
-  │   ├─▶ Render prompt with initial context
+  │   ├─▶ Execute agent with plan prompts
+  │   │   └─▶ Agent asks clarifying questions
   │   │
-  │   ├─▶ Execute agent (gba-core)
-  │   │   └─▶ Agent asks questions
+  │   ├─▶ Display chat interface
+  │   │   ├─▶ User answers questions
+  │   │   └─▶ Agent refines plan
   │   │
-  │   ├─▶ Display questions in UI (ratatui)
+  │   ├─▶ Continue conversation until plan complete
   │   │
-  │   ├─▶ Collect user answers
-  │   │
-  │   ├─▶ Continue conversation
-  │   │   └─▶ Repeat until plan complete
-  │   │
-  │   └─▶ Agent generates final plan
+  │   └─▶ Agent generates:
+  │       ├─▶ specs/design.md (architecture & implementation)
+  │       └─▶ specs/verification.md (test criteria)
   │
   ├─▶ Save plan artifacts
-  │   ├─▶ specs/design.md
-  │   ├─▶ specs/verification.md
-  │   └─▶ state.yml (with feature ID and git info)
+  │   ├─▶ Write specs/design.md
+  │   ├─▶ Write specs/verification.md
+  │   └─▶ Create state.yml (status: planned)
   │
   └─▶ Display success message
       └─▶ "Plan finished. Run 'gba run <id>_<slug>' to execute"
 ```
 
+**Interactive Planning Session**:
+```
+$ gba plan add-user-auth
+Creating feature 0001_add-user-auth...
+✓ Created feature directory
+✓ Created git worktree (branch: feature/0001-add-user-auth)
+
+Starting interactive planning session...
+
+┌─────────────────────────────────────────────────────────────┐
+│ Feature Planning: add-user-auth                             │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│ Assistant: Can you describe the authentication feature?    │
+│                                                             │
+│ You: I want to add JWT-based authentication with login     │
+│      and registration endpoints                            │
+│                                                             │
+│ Assistant: I'll design a solution with:                    │
+│            - JWT token generation and validation           │
+│            - Login/register endpoints                      │
+│            - Middleware for protected routes               │
+│            Should I proceed with this approach?            │
+│                                                             │
+│ You: Yes, looks good                                       │
+│                                                             │
+│ Assistant: ✓ Generated specs/design.md                    │
+│            ✓ Generated specs/verification.md              │
+│            Plan complete!                                  │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+Plan finished. Run 'gba run 0001_add-user-auth' to execute.
+```
+
 ### 5.3 Run Workflow
+
+**Supports Resume**: If execution is interrupted (Ctrl+C, network issues, system crash), running `gba run` again automatically resumes from the last completed phase.
 
 ```
 User: $ gba run <id>_<feature-slug> [--resume]
@@ -1732,33 +1788,28 @@ User: $ gba run <id>_<feature-slug> [--resume]
   │   └─▶ cd .trees/<id>_<slug>/
   │
   ├─▶ Check for resume
-  │   ├─▶ If --resume flag OR state.resume.can_resume:
-  │   │   ├─▶ Load current_phase index
+  │   ├─▶ If --resume flag OR state.resume.canResume:
+  │   │   ├─▶ Load currentPhase index
   │   │   ├─▶ Display resume information
-  │   │   └─▶ Start from current_phase
+  │   │   └─▶ Start from currentPhase
   │   └─▶ Else: Start from phase 0
-  │
-  ├─▶ Load feature plan
-  │   └─▶ Read specs/ and state.yml
   │
   ├─▶ For each phase (from start index):
   │   │
+  │   ├─▶ Load task configuration
+  │   │   ├─▶ Load prompts/{phaseName}/config.yml
+  │   │   ├─▶ Load prompts/{phaseName}/system.md + user.md
+  │   │   └─▶ Render with context (repo_path, feature_slug, feature_id)
+  │   │
   │   ├─▶ Update state.yml
   │   │   ├─▶ phase.status = "in_progress"
-  │   │   ├─▶ current_phase = index
-  │   │   └─▶ phase.started_at = now
+  │   │   ├─▶ currentPhase = index
+  │   │   └─▶ phase.startedAt = now
   │   │
-  │   ├─▶ Display phase header (ratatui)
-  │   │
-  │   ├─▶ Load phase prompt template (gba-pm)
-  │   │
-  │   ├─▶ Render prompt with context
-  │   │   ├─▶ Feature specs
-  │   │   ├─▶ Previous phase outputs
-  │   │   ├─▶ Resume information (if resuming)
-  │   │   └─▶ Repo context
+  │   ├─▶ Display phase header (progress UI)
   │   │
   │   ├─▶ Execute agent (gba-core)
+  │   │   ├─▶ Apply task config (preset, tools)
   │   │   ├─▶ Track turns, tokens, and cost
   │   │   ├─▶ Show progress spinner
   │   │   └─▶ Stream output to UI
@@ -1767,27 +1818,27 @@ User: $ gba run <id>_<feature-slug> [--resume]
   │   │   ├─▶ Update state.yml:
   │   │   │   ├─▶ phase.status = "completed"
   │   │   │   ├─▶ phase.stats (turns, tokens, cost)
-  │   │   │   ├─▶ phase.completed_at = now
-  │   │   │   └─▶ phase.output_summary = "..."
+  │   │   │   ├─▶ phase.completedAt = now
+  │   │   │   └─▶ phase.outputSummary = "..."
   │   │   └─▶ docs/impl_details.md (append)
   │   │
-  │   ├─▶ Git commit (if auto_commit enabled)
+  │   ├─▶ Git commit (if autoCommit enabled)
   │   │   ├─▶ git add .
   │   │   ├─▶ git commit -m "Phase <name>: <summary>"
-  │   │   └─▶ Save commit_sha to state.yml
+  │   │   └─▶ Save commitSha to state.yml
   │   │
-  │   ├─▶ Check phase success
+  │   ├─▶ Handle errors/interruptions
   │   │   ├─▶ If failed:
   │   │   │   ├─▶ Update state.yml (status = "failed")
-  │   │   │   ├─▶ Set resume.can_resume = true
+  │   │   │   ├─▶ Set resume.canResume = true
   │   │   │   └─▶ Prompt to retry or abort
   │   │   └─▶ If interrupted (Ctrl+C):
   │   │       ├─▶ Update state.yml:
-  │   │       │   ├─▶ resume.can_resume = true
-  │   │       │   ├─▶ resume.last_completed_phase = "..."
-  │   │       │   ├─▶ resume.next_phase = "..."
-  │   │       │   ├─▶ resume.interrupted_at = now
-  │   │       │   └─▶ resume.interrupt_reason = "user_cancelled"
+  │   │       │   ├─▶ resume.canResume = true
+  │   │       │   ├─▶ resume.lastCompletedPhase = "..."
+  │   │       │   ├─▶ resume.nextPhase = "..."
+  │   │       │   ├─▶ resume.interruptedAt = now
+  │   │       │   └─▶ resume.interruptReason = "userCancelled"
   │   │       └─▶ Display resume instructions
   │   │
   │   └─▶ Continue to next phase
@@ -1795,11 +1846,11 @@ User: $ gba run <id>_<feature-slug> [--resume]
   ├─▶ After PR phase:
   │   └─▶ Update state.yml:
   │       ├─▶ status = "completed"
-  │       ├─▶ execution.end_time = now
-  │       ├─▶ pull_request.url = "..."
-  │       ├─▶ pull_request.number = N
-  │       ├─▶ pull_request.created_at = now
-  │       └─▶ current_phase = phases.len()
+  │       ├─▶ execution.endTime = now
+  │       ├─▶ pullRequest.url = "..."
+  │       ├─▶ pullRequest.number = N
+  │       ├─▶ pullRequest.createdAt = now
+  │       └─▶ currentPhase = phases.len()
   │
   └─▶ Display completion summary
       ├─▶ Show all phases completed
