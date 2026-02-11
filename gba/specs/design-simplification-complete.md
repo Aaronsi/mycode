@@ -43,22 +43,27 @@ let options = ClaudeAgentOptions {
 
 **Before**: `crates/gba-pm/templates/`
 
-**After**: `prompts/` (root level)
+**After**: `prompts/` (root level) with per-task configuration
 
 **Rationale**:
 - Templates are project-level resources, not crate-specific
-- Each task has its own `config.yml` in `.gba/feature-name/`
+- Each task is self-contained with its own `config.yml`
 - Shared templates should be at project root
 - Clearer separation: code in `crates/`, resources at root
+- Follows "convention over configuration" principle
 
 **New Structure**:
 ```
 gba/
 ├── prompts/              # Project-level prompt templates
 │   ├── init/
+│   │   ├── config.yml   # Task-specific configuration
+│   │   ├── system.md    # System prompt (role definition)
+│   │   └── user.md      # User prompt (task description)
+│   ├── plan/
+│   │   ├── config.yml
 │   │   ├── system.md
 │   │   └── user.md
-│   ├── plan/
 │   ├── observe/
 │   ├── build/
 │   ├── test/
@@ -69,10 +74,16 @@ gba/
 │   ├── gba-core/
 │   ├── gba-pm/          # Prompt manager code only
 │   └── gba-cli/
-└── .gba/                # Per-task workspace
+└── .gba/                # Per-feature workspace
     └── feature-name/
-        ├── config.yml   # Task-specific config
-        └── .trees/
+        └── state.yml    # Feature execution state
+```
+
+**Task Configuration** (`prompts/{taskName}/config.yml`):
+```yaml
+preset: false           # true: use claude_code preset, false: use custom system.md
+tools: []              # Empty = all tools, or specify: ["Bash", "Read", "Write"]
+disallowedTools: []    # Tools to explicitly disallow (empty = no restrictions)
 ```
 
 ### 3. Vec<T> Instead of Option<Vec<T>> ✅
@@ -118,48 +129,64 @@ pub struct Phase {
 
 **Important**: All configuration files use camelCase for field names (following `#[serde(rename_all = "camelCase")]`).
 
+#### Project-Level Configuration (`.gba/config.yml`)
+
+Project-level config only contains global settings. Task-specific settings are in each task's `config.yml`.
+
 ```yaml
-# config.yml
+# .gba/config.yml
 version: "0.1.0"
 
-# Model configuration
-model:
-  name: "claude-sonnet-4-5"
-  maxTurns: 10
-  provider: "codex"
+# Agent configuration
+agent:
+  apiKeyEnv: "ANTHROPIC_API_KEY"
+  model: "claude-sonnet-4-5"
+  permissionMode: "auto"
+  budgetLimit: null
+  timeoutSeconds: 300
 
-# Phase configuration
-# Templates automatically loaded from prompts/{phaseName}/system.md and user.md
+# Git configuration
+git:
+  autoCommit: true
+  branchPattern: "feature/{id}-{slug}"
+  useWorktree: true
+  baseBranch: "main"
+
+# Phase execution order (config in prompts/{phaseName}/config.yml)
 phases:
   - name: "observe"
     description: "Observe codebase and understand context"
-    preset: false        # Use custom system.md
-    tools: []           # All tools available
-
   - name: "build"
     description: "Build implementation"
-    preset: false        # Use custom system.md (Rust developer role)
-    tools: []           # All tools available
-
   - name: "test"
     description: "Write and run tests"
-    preset: false        # Use custom system.md (test engineer role)
-    tools: []           # All tools available
-
   - name: "verification"
     description: "Verify implementation against requirements"
-    preset: false        # Use custom system.md (QA role)
-    tools: []           # All tools available
-
   - name: "review"
     description: "Code review and refinement"
-    preset: false        # Use custom system.md (reviewer role)
-    tools: []           # All tools available
-
   - name: "pr"
     description: "Create pull request"
-    preset: true         # Use claude_code preset
-    tools: ["Bash"]     # Only Bash for git operations
+```
+
+#### Task-Level Configuration (`prompts/{taskName}/config.yml`)
+
+Each task directory contains its own configuration:
+
+```yaml
+# prompts/build/config.yml
+preset: false           # Use custom system.md (Rust developer role)
+tools: []              # All tools available
+disallowedTools: []    # No restrictions
+
+# prompts/pr/config.yml
+preset: true            # Use claude_code preset
+tools: ["Bash"]        # Only Bash for git operations
+disallowedTools: []
+
+# prompts/observe/config.yml
+preset: false           # Use custom analyst role
+tools: ["Read", "Glob", "Grep"]  # Only read operations
+disallowedTools: ["Write", "Edit", "Bash"]
 ```
 
 ## Implementation Guide
@@ -168,6 +195,14 @@ phases:
 
 ```rust
 impl PromptManager {
+    /// Load task configuration from prompts/{taskName}/config.yml
+    pub fn load_task_config(&self, task_name: &str) -> Result<TaskConfig> {
+        let config_path = self.template_dir.join(task_name).join("config.yml");
+        let content = std::fs::read_to_string(&config_path)?;
+        let config: TaskConfig = serde_yaml::from_str(&content)?;
+        Ok(config)
+    }
+
     /// Load both system and user prompts for a phase
     /// Returns (system_prompt, user_prompt)
     pub fn load_phase_prompts(
@@ -184,6 +219,14 @@ impl PromptManager {
         Ok((system_prompt, user_prompt))
     }
 }
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskConfig {
+    pub preset: bool,
+    pub tools: Vec<String>,
+    pub disallowed_tools: Vec<String>,
+}
 ```
 
 ### AgentRunner Updates
@@ -191,24 +234,32 @@ impl PromptManager {
 ```rust
 impl AgentRunner {
     pub async fn execute(&self, request: ExecutionRequest) -> Result<ExecutionResult> {
-        // Build options based on phase configuration
+        // Load task configuration
+        let task_config = self.prompt_manager.load_task_config(&request.task_name)?;
+
+        // Build options based on task configuration
         let mut options = self.inner.options.clone();
 
-        // Set system prompt
-        options.system_prompt = if let Some(custom_system) = request.system_prompt {
-            // Use custom system prompt
-            Some(SystemPrompt::Text(custom_system))
-        } else {
+        // Set system prompt based on preset flag
+        options.system_prompt = if task_config.preset {
             // Use claude_code preset
             Some(SystemPrompt::Preset(
                 SystemPromptPreset::new("claude_code")
             ))
+        } else {
+            // Use custom system prompt
+            let (system_prompt, _) = self.prompt_manager.load_phase_prompts(
+                &request.task_name,
+                &request.context
+            )?;
+            Some(SystemPrompt::Text(system_prompt))
         };
 
-        // Set tools (empty vec = all tools)
-        if !request.tools.is_empty() {
-            options.tools = request.tools;
+        // Set tools based on configuration
+        if !task_config.tools.is_empty() {
+            options.tools = task_config.tools;
         }
+        // Note: disallowedTools would need SDK support
 
         // Create client and execute
         let mut client = ClaudeClient::new(options)?;
@@ -225,9 +276,12 @@ impl AgentRunner {
         for (idx, phase) in phases.into_iter().enumerate() {
             tracing::info!("Executing phase {}: {}", idx + 1, phase.name);
 
-            // Load prompts based on phase configuration
-            let (system_prompt, user_prompt) = if phase.preset {
-                // Use claude_code preset
+            // Load task configuration
+            let task_config = self.prompt_manager.load_task_config(&phase.name)?;
+
+            // Load prompts
+            let (system_prompt, user_prompt) = if task_config.preset {
+                // Use preset, only load user prompt
                 let user_prompt = self.prompt_manager.render(
                     &format!("{}/user.md", phase.name),
                     &phase.context
@@ -243,9 +297,10 @@ impl AgentRunner {
             };
 
             let request = ExecutionRequest {
+                task_name: phase.name.clone(),
                 system_prompt,
                 user_prompt,
-                tools: phase.tools.clone(),
+                tools: task_config.tools,
                 context: phase.context.clone(),
                 timeout: Some(Duration::from_secs(300)),
             };

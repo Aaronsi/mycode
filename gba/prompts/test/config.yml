@@ -1,0 +1,4 @@
+# Task configuration for test phase
+preset: false           # Use custom system prompt (test engineer role)
+tools: []              # All tools available for testing
+disallowedTools: []    # No restrictions

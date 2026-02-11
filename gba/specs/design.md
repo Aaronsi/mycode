@@ -1178,24 +1178,78 @@ Please implement the feature now.
 
 **Updated Template Structure** (2026-02-11):
 
-Templates are organized at project root level, as they are shared resources across all tasks:
+Templates are organized at project root level with per-task configuration:
 
 ```
 gba/
 ├── prompts/              # Project-level prompt templates
-│   ├── init/            (system.md + user.md)
-│   ├── plan/            (system.md + user.md)
-│   ├── observe/         (system.md + user.md)
-│   ├── build/           (system.md + user.md)
-│   ├── test/            (system.md + user.md)
-│   ├── verification/    (system.md + user.md)
-│   ├── review/          (system.md + user.md)
-│   └── pr/              (system.md + user.md)
+│   ├── init/
+│   │   ├── config.yml   # Task-specific configuration
+│   │   ├── system.md    # System prompt (role definition)
+│   │   └── user.md      # User prompt (task description)
+│   ├── plan/
+│   │   ├── config.yml
+│   │   ├── system.md
+│   │   └── user.md
+│   ├── observe/
+│   │   ├── config.yml
+│   │   ├── system.md
+│   │   └── user.md
+│   ├── build/
+│   │   ├── config.yml
+│   │   ├── system.md
+│   │   └── user.md
+│   ├── test/
+│   │   ├── config.yml
+│   │   ├── system.md
+│   │   └── user.md
+│   ├── verification/
+│   │   ├── config.yml
+│   │   ├── system.md
+│   │   └── user.md
+│   ├── review/
+│   │   ├── config.yml
+│   │   ├── system.md
+│   │   └── user.md
+│   └── pr/
+│       ├── config.yml
+│       ├── system.md
+│       └── user.md
 ├── crates/
 │   └── gba-pm/          # Prompt manager code
-└── .gba/                # Per-task workspace
+└── .gba/                # Per-feature workspace
     └── feature-name/
-        └── config.yml   # Task-specific config
+        └── state.yml    # Feature execution state
+```
+
+**Task Configuration** (`config.yml`):
+
+Each task directory contains a `config.yml` that defines task-specific settings:
+
+```yaml
+# prompts/build/config.yml
+preset: false           # true: use claude_code preset, false: use custom system.md
+tools: []              # Empty = all tools, or specify: ["Bash", "Read", "Write"]
+disallowedTools: []    # Tools to explicitly disallow (empty = no restrictions)
+```
+
+**Examples**:
+
+```yaml
+# prompts/build/config.yml - Full development environment
+preset: false           # Use custom Rust developer role
+tools: []              # All tools available
+disallowedTools: []
+
+# prompts/pr/config.yml - Git operations only
+preset: true            # Use claude_code preset
+tools: ["Bash"]        # Only Bash for git commands
+disallowedTools: []
+
+# prompts/observe/config.yml - Read-only exploration
+preset: false           # Use custom analyst role
+tools: ["Read", "Glob", "Grep"]  # Only read operations
+disallowedTools: ["Write", "Edit", "Bash"]
 ```
 
 **System Prompt vs User Prompt**:
@@ -1209,7 +1263,7 @@ gba/
 
 - **User Prompt** (`user.md`): Defines the specific task and context
   - Task description and objectives
-  - Context information (repo_path, specs, etc.)
+  - Context information (repoPath, specs, etc.)
   - Execution steps and output requirements
   - No role definitions (handled by system prompt)
 
@@ -1230,15 +1284,15 @@ Each phase can use either Claude Code preset or custom system prompt:
 ```rust
 use claude_agent_sdk_rs::{ClaudeAgentOptions, SystemPrompt, SystemPromptPreset};
 
-// Option 1: Use Claude Code preset (with optional append)
+// Option 1: Use Claude Code preset (when config.preset = true)
 let options = ClaudeAgentOptions {
     system_prompt: Some(SystemPrompt::Preset(
-        SystemPromptPreset::with_append("claude_code", "Additional instructions...")
+        SystemPromptPreset::new("claude_code")
     )),
     ..Default::default()
 };
 
-// Option 2: Use custom system prompt
+// Option 2: Use custom system prompt (when config.preset = false)
 let (system_prompt, user_prompt) = prompt_manager.load_phase_prompts("build", &context)?;
 let options = ClaudeAgentOptions {
     system_prompt: Some(SystemPrompt::Text(system_prompt)),
@@ -1246,32 +1300,19 @@ let options = ClaudeAgentOptions {
 };
 ```
 
-**Configuration**:
-
-```yaml
-phases:
-  - name: "build"
-    description: "Build implementation"
-    preset: false           # Use custom system.md
-    tools: []              # Empty = all tools (Read, Write, Edit, Bash, etc.)
-
-  - name: "pr"
-    description: "Create pull request"
-    preset: true           # Use claude_code preset
-    tools: ["Bash"]        # Only Bash tool for git operations
-```
-
 **Convention Over Configuration**:
 
-- Templates automatically loaded from `prompts/{phase_name}/system.md` and `prompts/{phase_name}/user.md`
-- `preset: false` → Load and use custom `system.md`
-- `preset: true` → Use `claude_code` preset, optionally append content from `system.md`
-- `tools: []` → All tools available (default)
-- `tools: ["Bash", "Read"]` → Only specified tools available
+- Each task is self-contained with its own `config.yml`
+- Templates automatically loaded from `prompts/{taskName}/system.md` and `user.md`
+- Task configuration loaded from `prompts/{taskName}/config.yml`
+- No need to duplicate task settings in project-level config
+- Project-level `.gba/config.yml` only contains global settings (API key, model, git settings)
 
 **Benefits**:
 - Clear separation of concerns (role vs task)
-- Simple preset decision (boolean flag)
+- Self-contained tasks (config + templates together)
+- Simple preset decision (boolean flag per task)
+- Flexible tool restrictions per task
 - Reusable system prompts across similar tasks
 - Better maintainability and flexibility
 - Follows prompt engineering best practices
@@ -1428,45 +1469,27 @@ review:
   # Review provider: codex | claude | none
   provider: "codex"
 
-# Phase configuration
-# Templates are automatically loaded from prompts/{phaseName}/system.md and user.md
-# This follows "convention over configuration" principle
+# Phase execution order
+# Each phase's configuration is defined in prompts/{phaseName}/config.yml
+# This list only defines the execution order and descriptions
 phases:
   - name: "observe"
     description: "Observe codebase and understand context"
-    preset: false        # Use custom system.md
-    tools: []           # Empty = all tools available
-    # Loads: prompts/observe/system.md + prompts/observe/user.md
 
   - name: "build"
     description: "Build implementation"
-    preset: false        # Use custom system.md (Rust developer role)
-    tools: []           # All tools available
-    # Loads: prompts/build/system.md + prompts/build/user.md
 
   - name: "test"
     description: "Write and run tests"
-    preset: false        # Use custom system.md (test engineer role)
-    tools: []           # All tools available
-    # Loads: prompts/test/system.md + prompts/test/user.md
 
   - name: "verification"
     description: "Verify implementation against requirements"
-    preset: false        # Use custom system.md (QA role)
-    tools: []           # All tools available
-    # Loads: prompts/verification/system.md + prompts/verification/user.md
 
   - name: "review"
     description: "Code review and refinement"
-    preset: false        # Use custom system.md (reviewer role)
-    tools: []           # All tools available
-    # Loads: prompts/review/system.md + prompts/review/user.md
 
   - name: "pr"
     description: "Create pull request"
-    preset: true         # Use claude_code preset
-    tools: ["Bash"]     # Only Bash for git operations
-    # Loads: prompts/pr/user.md (system.md optional for append)
 ```
 
 ### 4.3 Feature State File

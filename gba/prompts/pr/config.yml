@@ -1,0 +1,4 @@
+# Task configuration for PR phase
+preset: true            # Use claude_code preset (already has git expertise)
+tools: ["Bash"]        # Only Bash tool for git operations
+disallowedTools: []    # No additional restrictions

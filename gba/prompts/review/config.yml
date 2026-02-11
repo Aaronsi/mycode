@@ -1,0 +1,4 @@
+# Task configuration for review phase
+preset: false           # Use custom system prompt (reviewer role)
+tools: []              # All tools available for code review
+disallowedTools: []    # No restrictions

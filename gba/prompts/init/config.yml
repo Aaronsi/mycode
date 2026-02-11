@@ -1,0 +1,4 @@
+# Task configuration for init phase
+preset: false           # Use custom system prompt (base role)
+tools: []              # All tools available
+disallowedTools: []    # No restrictions

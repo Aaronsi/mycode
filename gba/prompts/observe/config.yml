@@ -1,0 +1,4 @@
+# Task configuration for observe phase
+preset: false           # Use custom system prompt (analyst role)
+tools: []              # All tools available for exploration
+disallowedTools: []    # No restrictions

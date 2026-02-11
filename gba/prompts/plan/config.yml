@@ -1,0 +1,4 @@
+# Task configuration for plan phase
+preset: false           # Use custom system prompt (architect role)
+tools: []              # All tools available
+disallowedTools: []    # No restrictions

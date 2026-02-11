@@ -1,0 +1,4 @@
+# Task configuration for verification phase
+preset: false           # Use custom system prompt (QA role)
+tools: []              # All tools available for verification
+disallowedTools: []    # No restrictions

@@ -1,0 +1,4 @@
+# Task configuration for build phase
+preset: false           # Use custom system prompt (Rust developer role)
+tools: []              # All tools available for implementation
+disallowedTools: []    # No restrictions
