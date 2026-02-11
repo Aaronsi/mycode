@@ -134,7 +134,9 @@ impl AgentRunner {
 
 // Execution request
 pub struct ExecutionRequest {
-    pub prompt: String,
+    pub system_prompt: Option<String>, // None = use claude_code preset
+    pub user_prompt: String,
+    pub tools: Vec<String>,            // Empty = all tools
     pub context: ExecutionContext,
     pub timeout: Option<Duration>,
 }
@@ -167,7 +169,9 @@ pub struct ExecutionStats {
 // Phase definition
 pub struct Phase {
     pub name: String,
-    pub prompt_template: String,
+    pub description: String,
+    pub preset: bool,              // true = use claude_code preset
+    pub tools: Vec<String>,        // Empty = all tools
     pub context: ExecutionContext,
 }
 
@@ -321,7 +325,7 @@ struct AgentRunnerInner {
 
 impl AgentRunner {
     pub async fn new(api_key: String) -> Result<Self> {
-        // Configure agent options
+        // Configure agent options with default settings
         let options = ClaudeAgentOptions::builder()
             .api_key(api_key)
             .model("claude-sonnet-4-5")
@@ -337,14 +341,33 @@ impl AgentRunner {
     }
 
     pub async fn execute(&self, request: ExecutionRequest) -> Result<ExecutionResult> {
+        // Build options based on phase configuration
+        let mut options = self.inner.options.clone();
+
+        // Set system prompt
+        options.system_prompt = if let Some(custom_system) = request.system_prompt {
+            // Use custom system prompt
+            Some(SystemPrompt::Text(custom_system))
+        } else {
+            // Use claude_code preset
+            Some(SystemPrompt::Preset(
+                SystemPromptPreset::new("claude_code")
+            ))
+        };
+
+        // Set tools (empty vec = all tools)
+        if !request.tools.is_empty() {
+            options.tools = request.tools;
+        }
+
         // Create client for this execution
-        let mut client = ClaudeClient::new(self.inner.options.clone())?;
+        let mut client = ClaudeClient::new(options)?;
 
         // Connect to Claude
         client.connect().await?;
 
-        // Send the prompt
-        client.query(&request.prompt).await?;
+        // Send the user prompt
+        client.query(&request.user_prompt).await?;
 
         // Collect responses
         let mut full_output = String::new();
@@ -508,6 +531,30 @@ impl AgentRunner {
         for (idx, phase) in phases.into_iter().enumerate() {
             tracing::info!("Executing phase {}: {}", idx + 1, phase.name);
 
+            // Load prompts based on phase configuration
+            let (system_prompt, user_prompt) = if phase.preset {
+                // Use claude_code preset, optionally append system.md
+                let user_prompt = self.prompt_manager.render(
+                    &format!("{}/user.md", phase.name),
+                    &phase.context
+                )?;
+
+                // Optional: load system.md for append text
+                let append_text = self.prompt_manager.render(
+                    &format!("{}/system.md", phase.name),
+                    &phase.context
+                ).ok(); // Ignore if not exists
+
+                (None, user_prompt) // None means use preset
+            } else {
+                // Use custom system prompt
+                let (sys, usr) = self.prompt_manager.load_phase_prompts(
+                    &phase.name,
+                    &phase.context
+                )?;
+                (Some(sys), usr)
+            };
+
             // Build request with previous results as context
             let mut context = phase.context;
             if let Some(prev_result) = results.last() {
@@ -518,7 +565,9 @@ impl AgentRunner {
             }
 
             let request = ExecutionRequest {
-                prompt: phase.prompt_template,
+                system_prompt,
+                user_prompt,
+                tools: phase.tools, // Vec<String>, empty = all tools
                 context,
                 timeout: Some(Duration::from_secs(300)),
             };
@@ -857,6 +906,22 @@ impl PromptManager {
         Ok(rendered)
     }
 
+    /// Load both system and user prompts for a phase
+    /// Returns (system_prompt, user_prompt)
+    pub fn load_phase_prompts(
+        &self,
+        phase_name: &str,
+        context: &PromptContext,
+    ) -> Result<(String, String)> {
+        let system_path = format!("{}/system.md", phase_name);
+        let user_path = format!("{}/user.md", phase_name);
+
+        let system_prompt = self.render(&system_path, context)?;
+        let user_prompt = self.render(&user_path, context)?;
+
+        Ok((system_prompt, user_prompt))
+    }
+
     pub fn list_templates(&self) -> Result<Vec<String>> {
         let mut templates = Vec::new();
 
@@ -1113,18 +1178,24 @@ Please implement the feature now.
 
 **Updated Template Structure** (2026-02-11):
 
-Templates are now organized by execution step, with each step containing both system and user prompts:
+Templates are organized at project root level, as they are shared resources across all tasks:
 
 ```
-crates/gba-pm/templates/
-├── init/          (system.md + user.md)
-├── plan/          (system.md + user.md)
-├── observe/       (system.md + user.md)
-├── build/         (system.md + user.md)
-├── test/          (system.md + user.md)
-├── verification/  (system.md + user.md)
-├── review/        (system.md + user.md)
-└── pr/            (system.md + user.md)
+gba/
+├── prompts/              # Project-level prompt templates
+│   ├── init/            (system.md + user.md)
+│   ├── plan/            (system.md + user.md)
+│   ├── observe/         (system.md + user.md)
+│   ├── build/           (system.md + user.md)
+│   ├── test/            (system.md + user.md)
+│   ├── verification/    (system.md + user.md)
+│   ├── review/          (system.md + user.md)
+│   └── pr/              (system.md + user.md)
+├── crates/
+│   └── gba-pm/          # Prompt manager code
+└── .gba/                # Per-task workspace
+    └── feature-name/
+        └── config.yml   # Task-specific config
 ```
 
 **System Prompt vs User Prompt**:
@@ -1152,41 +1223,59 @@ crates/gba-pm/templates/
 6. **review**: Reviewer role (code review)
 7. **pr**: DevOps role (Git workflows and PR management)
 
-**SDK Integration**:
+**Preset vs Custom System Prompts**:
+
+Each phase can use either Claude Code preset or custom system prompt:
 
 ```rust
-use claude_agent_sdk_rs::{ClaudeAgentOptions, SystemPrompt};
+use claude_agent_sdk_rs::{ClaudeAgentOptions, SystemPrompt, SystemPromptPreset};
 
-// Load both prompts for a phase
-let (system_prompt, user_prompt) = prompt_manager.load_phase_prompts("build", &context)?;
-
-// Create options with custom system prompt
+// Option 1: Use Claude Code preset (with optional append)
 let options = ClaudeAgentOptions {
-    system_prompt: Some(SystemPrompt::Text(system_prompt)),
-    model: Some("claude-sonnet-4-5".to_string()),
+    system_prompt: Some(SystemPrompt::Preset(
+        SystemPromptPreset::with_append("claude_code", "Additional instructions...")
+    )),
     ..Default::default()
 };
 
-// Execute with specialized role
-let mut client = ClaudeClient::new(options);
-client.connect().await?;
-client.query(&user_prompt).await?;
+// Option 2: Use custom system prompt
+let (system_prompt, user_prompt) = prompt_manager.load_phase_prompts("build", &context)?;
+let options = ClaudeAgentOptions {
+    system_prompt: Some(SystemPrompt::Text(system_prompt)),
+    ..Default::default()
+};
+```
+
+**Configuration**:
+
+```yaml
+phases:
+  - name: "build"
+    description: "Build implementation"
+    preset: false           # Use custom system.md
+    tools: []              # Empty = all tools (Read, Write, Edit, Bash, etc.)
+
+  - name: "pr"
+    description: "Create pull request"
+    preset: true           # Use claude_code preset
+    tools: ["Bash"]        # Only Bash tool for git operations
 ```
 
 **Convention Over Configuration**:
 
-Templates are automatically loaded based on phase name:
-- System prompt: `{phase_name}/system.md`
-- User prompt: `{phase_name}/user.md`
-
-No need to specify template paths in config - just the phase name.
+- Templates automatically loaded from `prompts/{phase_name}/system.md` and `prompts/{phase_name}/user.md`
+- `preset: false` → Load and use custom `system.md`
+- `preset: true` → Use `claude_code` preset, optionally append content from `system.md`
+- `tools: []` → All tools available (default)
+- `tools: ["Bash", "Read"]` → Only specified tools available
 
 **Benefits**:
 - Clear separation of concerns (role vs task)
+- Simple preset decision (boolean flag)
 - Reusable system prompts across similar tasks
 - Better maintainability and flexibility
 - Follows prompt engineering best practices
-- Fine-grained control over AI behavior per phase
+- Fine-grained control over AI behavior and tool access per phase
 
 ### 3.3 gba-cli
 
@@ -1340,32 +1429,44 @@ review:
   provider: "codex"
 
 # Phase configuration
-# Templates are automatically loaded from {phase_name}/system.md and {phase_name}/user.md
+# Templates are automatically loaded from prompts/{phase_name}/system.md and user.md
 # This follows "convention over configuration" principle
 phases:
   - name: "observe"
     description: "Observe codebase and understand context"
-    # Loads: observe/system.md + observe/user.md
+    preset: false        # Use custom system.md
+    tools: []           # Empty = all tools available
+    # Loads: prompts/observe/system.md + prompts/observe/user.md
 
   - name: "build"
     description: "Build implementation"
-    # Loads: build/system.md + build/user.md
+    preset: false        # Use custom system.md (Rust developer role)
+    tools: []           # All tools available
+    # Loads: prompts/build/system.md + prompts/build/user.md
 
   - name: "test"
     description: "Write and run tests"
-    # Loads: test/system.md + test/user.md
+    preset: false        # Use custom system.md (test engineer role)
+    tools: []           # All tools available
+    # Loads: prompts/test/system.md + prompts/test/user.md
 
   - name: "verification"
     description: "Verify implementation against requirements"
-    # Loads: verification/system.md + verification/user.md
+    preset: false        # Use custom system.md (QA role)
+    tools: []           # All tools available
+    # Loads: prompts/verification/system.md + prompts/verification/user.md
 
   - name: "review"
     description: "Code review and refinement"
-    # Loads: review/system.md + review/user.md
+    preset: false        # Use custom system.md (reviewer role)
+    tools: []           # All tools available
+    # Loads: prompts/review/system.md + prompts/review/user.md
 
   - name: "pr"
     description: "Create pull request"
-    # Loads: pr/system.md + pr/user.md
+    preset: true         # Use claude_code preset
+    tools: ["Bash"]     # Only Bash for git operations
+    # Loads: prompts/pr/user.md (system.md optional for append)
 ```
 
 ### 4.3 Feature State File

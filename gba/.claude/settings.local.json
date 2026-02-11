@@ -15,7 +15,11 @@
       "Bash(cargo +nightly check:*)",
       "Bash(cargo --version:*)",
       "Bash(git add:*)",
-      "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd comprehensive GBA design documentation and templates\n\n- Added complete design.md with feature ID system, git worktree support, and enhanced state tracking\n- Created 8 prompt templates \\(init, plan, 6 phases\\) following convention over configuration\n- Added design comparison and improvements documentation\n- Updated all Cargo.toml files to use claude-agent-sdk-rs 0.6\n- Added rust-toolchain.toml for Rust 2024 edition support\n- Created CLAUDE.md with project coding standards\n- Added template review checklist and verification documents\n\nAll templates reviewed and verified against checklist:\n- Clear instructions for AI agents\n- Correct variable usage\n- Resume handling in all phase templates\n- No unnecessary complexity\n- Production-ready quality\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd comprehensive GBA design documentation and templates\n\n- Added complete design.md with feature ID system, git worktree support, and enhanced state tracking\n- Created 8 prompt templates \\(init, plan, 6 phases\\) following convention over configuration\n- Added design comparison and improvements documentation\n- Updated all Cargo.toml files to use claude-agent-sdk-rs 0.6\n- Added rust-toolchain.toml for Rust 2024 edition support\n- Created CLAUDE.md with project coding standards\n- Added template review checklist and verification documents\n\nAll templates reviewed and verified against checklist:\n- Clear instructions for AI agents\n- Correct variable usage\n- Resume handling in all phase templates\n- No unnecessary complexity\n- Production-ready quality\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(cargo doc:*)",
+      "Bash(git commit:*)",
+      "Bash(git reset:*)",
+      "Bash(ls:*)"
     ]
   }
 }
