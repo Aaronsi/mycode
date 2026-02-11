@@ -1385,19 +1385,19 @@ version: "0.1.0"
 # Agent configuration
 agent:
   # API key environment variable name
-  api_key_env: "ANTHROPIC_API_KEY"
+  apiKeyEnv: "ANTHROPIC_API_KEY"
 
   # Default Claude model
   model: "claude-sonnet-4-5"
 
   # Permission mode: auto | manual | none
-  permission_mode: "auto"
+  permissionMode: "auto"
 
   # Budget limit in USD (optional)
-  budget_limit: null
+  budgetLimit: null
 
   # Timeout in seconds
-  timeout_seconds: 300
+  timeoutSeconds: 300
 
 # Prompt configuration
 prompts:
@@ -1408,17 +1408,17 @@ prompts:
 # Git configuration
 git:
   # Auto-commit after each phase
-  auto_commit: true
+  autoCommit: true
 
   # Branch naming pattern
   # Available variables: {id}, {slug}
-  branch_pattern: "feature/{id}-{slug}"
+  branchPattern: "feature/{id}-{slug}"
 
   # Use git worktree for isolation
-  use_worktree: true
+  useWorktree: true
 
   # Base branch for new features
-  base_branch: "main"
+  baseBranch: "main"
 
 # Code review configuration
 review:
@@ -1429,7 +1429,7 @@ review:
   provider: "codex"
 
 # Phase configuration
-# Templates are automatically loaded from prompts/{phase_name}/system.md and user.md
+# Templates are automatically loaded from prompts/{phaseName}/system.md and user.md
 # This follows "convention over configuration" principle
 phases:
   - name: "observe"
@@ -1481,115 +1481,115 @@ version: "0.1.0"
 feature:
   id: "0001"
   slug: "user-authentication"
-  created_at: "2026-02-10T10:00:00Z"
-  updated_at: "2026-02-10T12:30:00Z"
+  createdAt: "2026-02-10T10:00:00Z"
+  updatedAt: "2026-02-10T12:30:00Z"
 
 # Execution status: planned | in_progress | completed | failed
 status: "in_progress"
 
 # Current phase index (0-based, for precise resume)
-current_phase: 2
+currentPhase: 2
 
 # Git information (if using worktree)
 git:
-  worktree_path: ".trees/0001_user-authentication"
+  worktreePath: ".trees/0001_user-authentication"
   branch: "feature/0001-user-authentication"
-  base_branch: "main"
-  base_commit: "abc1234"
+  baseBranch: "main"
+  baseCommit: "abc1234"
 
 # Phase execution history
 phases:
   - name: "observe"
     status: "completed"
-    started_at: "2026-02-10T10:00:00Z"
-    completed_at: "2026-02-10T10:15:00Z"
-    commit_sha: "def5678"
-    output_summary: "Analyzed authentication patterns in codebase"
+    startedAt: "2026-02-10T10:00:00Z"
+    completedAt: "2026-02-10T10:15:00Z"
+    commitSha: "def5678"
+    outputSummary: "Analyzed authentication patterns in codebase"
     stats:
       turns: 8
-      input_tokens: 12500
-      output_tokens: 8300
-      cost_usd: 0.42
+      inputTokens: 12500
+      outputTokens: 8300
+      costUsd: 0.42
 
   - name: "build"
     status: "completed"
-    started_at: "2026-02-10T10:15:00Z"
-    completed_at: "2026-02-10T11:00:00Z"
-    commit_sha: "ghi9012"
-    output_summary: "Implemented JWT-based authentication"
+    startedAt: "2026-02-10T10:15:00Z"
+    completedAt: "2026-02-10T11:00:00Z"
+    commitSha: "ghi9012"
+    outputSummary: "Implemented JWT-based authentication"
     stats:
       turns: 15
-      input_tokens: 45000
-      output_tokens: 32000
-      cost_usd: 0.89
+      inputTokens: 45000
+      outputTokens: 32000
+      costUsd: 0.89
 
   - name: "test"
     status: "completed"
-    started_at: "2026-02-10T11:00:00Z"
-    completed_at: "2026-02-10T11:30:00Z"
-    commit_sha: "jkl3456"
-    output_summary: "Added unit and integration tests"
+    startedAt: "2026-02-10T11:00:00Z"
+    completedAt: "2026-02-10T11:30:00Z"
+    commitSha: "jkl3456"
+    outputSummary: "Added unit and integration tests"
     stats:
       turns: 12
-      input_tokens: 28000
-      output_tokens: 19000
-      cost_usd: 0.67
+      inputTokens: 28000
+      outputTokens: 19000
+      costUsd: 0.67
 
   - name: "verification"
     status: "in_progress"
-    started_at: "2026-02-10T11:30:00Z"
-    completed_at: null
-    commit_sha: null
-    output_summary: null
+    startedAt: "2026-02-10T11:30:00Z"
+    completedAt: null
+    commitSha: null
+    outputSummary: null
     stats:
       turns: 10
-      input_tokens: 15000
-      output_tokens: 10000
-      cost_usd: 0.37
+      inputTokens: 15000
+      outputTokens: 10000
+      costUsd: 0.37
 
   - name: "review"
     status: "pending"
-    started_at: null
-    completed_at: null
-    commit_sha: null
-    output_summary: null
+    startedAt: null
+    completedAt: null
+    commitSha: null
+    outputSummary: null
     stats: null
 
   - name: "pr"
     status: "pending"
-    started_at: null
-    completed_at: null
-    commit_sha: null
-    output_summary: null
+    startedAt: null
+    completedAt: null
+    commitSha: null
+    outputSummary: null
     stats: null
 
 # Total statistics (accumulated across all phases)
-total_stats:
+totalStats:
   turns: 45
-  input_tokens: 100500
-  output_tokens: 69300
-  cost_usd: 2.35
+  inputTokens: 100500
+  outputTokens: 69300
+  costUsd: 2.35
 
 # Execution timing
 execution:
-  start_time: "2026-02-10T10:00:00Z"
-  end_time: null
+  startTime: "2026-02-10T10:00:00Z"
+  endTime: null
 
 # Pull request information (populated after PR phase)
-pull_request:
+pullRequest:
   url: null  # e.g., "https://github.com/user/repo/pull/123"
   number: null
   title: null
-  created_at: null
+  createdAt: null
   merged: false
 
 # Resume information (for interrupted executions)
 resume:
-  can_resume: true
-  last_completed_phase: "test"
-  next_phase: "verification"
-  interrupted_at: "2026-02-10T12:30:00Z"
-  interrupt_reason: "user_cancelled"  # user_cancelled, timeout, error, system_shutdown
+  canResume: true
+  lastCompletedPhase: "test"
+  nextPhase: "verification"
+  interruptedAt: "2026-02-10T12:30:00Z"
+  interruptReason: "userCancelled"  # userCancelled, timeout, error, systemShutdown
 
 # Error information (if failed)
 error: null

@@ -116,6 +116,8 @@ pub struct Phase {
 
 ### 5. Updated Configuration Format ✅
 
+**Important**: All configuration files use camelCase for field names (following `#[serde(rename_all = "camelCase")]`).
+
 ```yaml
 # config.yml
 version: "0.1.0"
@@ -123,11 +125,11 @@ version: "0.1.0"
 # Model configuration
 model:
   name: "claude-sonnet-4-5"
-  max_turns: 10
+  maxTurns: 10
   provider: "codex"
 
 # Phase configuration
-# Templates automatically loaded from prompts/{phase_name}/system.md and user.md
+# Templates automatically loaded from prompts/{phaseName}/system.md and user.md
 phases:
   - name: "observe"
     description: "Observe codebase and understand context"
