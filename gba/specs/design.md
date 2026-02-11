@@ -1109,6 +1109,85 @@ Please implement the feature now.
 - Validate templates on load to fail fast
 - Support template inheritance and includes for reusability
 
+#### 3.2.4 Template Organization and System Prompts
+
+**Updated Template Structure** (2026-02-11):
+
+Templates are now organized by execution step, with each step containing both system and user prompts:
+
+```
+crates/gba-pm/templates/
+├── init/          (system.md + user.md)
+├── plan/          (system.md + user.md)
+├── observe/       (system.md + user.md)
+├── build/         (system.md + user.md)
+├── test/          (system.md + user.md)
+├── verification/  (system.md + user.md)
+├── review/        (system.md + user.md)
+└── pr/            (system.md + user.md)
+```
+
+**System Prompt vs User Prompt**:
+
+- **System Prompt** (`system.md`): Defines the AI agent's role, expertise, and behavior
+  - Role definition (e.g., "You are an expert software architect")
+  - Expertise areas and specializations
+  - Working principles and standards
+  - Tool usage guidelines
+  - Code quality and security standards
+
+- **User Prompt** (`user.md`): Defines the specific task and context
+  - Task description and objectives
+  - Context information (repo_path, specs, etc.)
+  - Execution steps and output requirements
+  - No role definitions (handled by system prompt)
+
+**Specialized Roles by Phase**:
+
+1. **init, observe**: Base role (general software engineering)
+2. **plan**: Architect role (software architecture design)
+3. **build**: Developer role (Rust programming)
+4. **test**: Tester role (test design and QA)
+5. **verification**: QA role (requirements verification)
+6. **review**: Reviewer role (code review)
+7. **pr**: DevOps role (Git workflows and PR management)
+
+**SDK Integration**:
+
+```rust
+use claude_agent_sdk_rs::{ClaudeAgentOptions, SystemPrompt};
+
+// Load both prompts for a phase
+let (system_prompt, user_prompt) = prompt_manager.load_phase_prompts("build", &context)?;
+
+// Create options with custom system prompt
+let options = ClaudeAgentOptions {
+    system_prompt: Some(SystemPrompt::Text(system_prompt)),
+    model: Some("claude-sonnet-4-5".to_string()),
+    ..Default::default()
+};
+
+// Execute with specialized role
+let mut client = ClaudeClient::new(options);
+client.connect().await?;
+client.query(&user_prompt).await?;
+```
+
+**Convention Over Configuration**:
+
+Templates are automatically loaded based on phase name:
+- System prompt: `{phase_name}/system.md`
+- User prompt: `{phase_name}/user.md`
+
+No need to specify template paths in config - just the phase name.
+
+**Benefits**:
+- Clear separation of concerns (role vs task)
+- Reusable system prompts across similar tasks
+- Better maintainability and flexibility
+- Follows prompt engineering best practices
+- Fine-grained control over AI behavior per phase
+
 ### 3.3 gba-cli
 
 **Purpose**: Command-line interface for user interaction.
@@ -1261,30 +1340,32 @@ review:
   provider: "codex"
 
 # Phase configuration
+# Templates are automatically loaded from {phase_name}/system.md and {phase_name}/user.md
+# This follows "convention over configuration" principle
 phases:
   - name: "observe"
-    prompt_template: "phase_1_observe.md"
     description: "Observe codebase and understand context"
+    # Loads: observe/system.md + observe/user.md
 
   - name: "build"
-    prompt_template: "phase_2_build.md"
     description: "Build implementation"
+    # Loads: build/system.md + build/user.md
 
   - name: "test"
-    prompt_template: "phase_3_test.md"
     description: "Write and run tests"
+    # Loads: test/system.md + test/user.md
 
   - name: "verification"
-    prompt_template: "phase_4_verification.md"
     description: "Verify implementation against requirements"
+    # Loads: verification/system.md + verification/user.md
 
   - name: "review"
-    prompt_template: "phase_5_review.md"
     description: "Code review and refinement"
+    # Loads: review/system.md + review/user.md
 
   - name: "pr"
-    prompt_template: "phase_6_pr.md"
     description: "Create pull request"
+    # Loads: pr/system.md + pr/user.md
 ```
 
 ### 4.3 Feature State File
