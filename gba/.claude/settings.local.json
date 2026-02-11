@@ -1,7 +1,19 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cargo build:*)"
+      "Bash(cargo build:*)",
+      "Bash(tree:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(gh repo view:*)",
+      "WebSearch",
+      "WebFetch(domain:docs.rs)",
+      "WebFetch(domain:crates.io)",
+      "Bash(cargo check:*)",
+      "Bash(rustc:*)",
+      "WebFetch(domain:lib.rs)",
+      "Bash(cargo +nightly check:*)",
+      "Bash(cargo --version:*)"
     ]
   }
 }

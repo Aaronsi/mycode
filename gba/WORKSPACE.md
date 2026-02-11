@@ -40,7 +40,7 @@ Features:
 ### `crates/gba-core`
 Core execution engine built with:
 - **tokio**: Async runtime
-- **claude-agent-sdk-rs 0.6**: Claude Agent SDK integration
+- **claude-agent-sdk-rs 0.6**: Claude Agent SDK (tyrchen's implementation, Git dependency)
 - **serde/serde_json**: Serialization
 
 Provides the main execution engine for running Claude agent tasks.
