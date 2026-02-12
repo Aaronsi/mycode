@@ -46,6 +46,7 @@ repos:
         entry: typos
         language: system
         files: \.*$
+        exclude: ^gba/vendors/
         pass_filenames: false
       - id: cargo-check
         name: cargo check

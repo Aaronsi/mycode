@@ -19,7 +19,11 @@
       "Bash(cargo doc:*)",
       "Bash(git commit:*)",
       "Bash(git reset:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(git submodule add:*)",
+      "Bash(git submodule:*)",
+      "Bash(typos:*)",
+      "Bash(pre-commit run:*)"
     ]
   }
 }
