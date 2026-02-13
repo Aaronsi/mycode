@@ -52,6 +52,7 @@ async fn main() -> Result<()> {
         repo_path: cli.repo,
         api_key,
         model: cli.model,
+        ..Default::default()
     };
 
     let engine = gba_core::Engine::new(config);
