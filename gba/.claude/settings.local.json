@@ -23,7 +23,18 @@
       "Bash(git submodule add:*)",
       "Bash(git submodule:*)",
       "Bash(typos:*)",
-      "Bash(pre-commit run:*)"
+      "Bash(pre-commit run:*)",
+      "Bash(git worktree add:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo +nightly fmt:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(codex --full-auto exec \"Review the code in crates/ and apps/ directories against the design specification. \n\nContext: This is a GBA \\(Geektime Bootcamp Agent\\) project implementing a CLI tool that wraps Claude Agent SDK.\n\nFocus areas:\n1. API design matches the spec in specs/design.md\n2. Error handling follows CLAUDE.md guidelines \\(thiserror for libraries, anyhow for apps, no unwrap/expect\\)\n3. Async patterns are correct \\(tokio runtime, channels, proper error handling\\)\n4. Code organization follows the design \\(gba-core, gba-pm, gba-cli structure\\)\n\nFor each issue found provide:\n- Location: File path and line number\n- Severity: Critical / High / Medium / Low / Info\n- Category: Bug / Security / Performance / Style / Documentation\n- Description: Clear explanation\n- Suggestion: How to fix\n\nReview these specific files:\n- crates/gba-core/src/lib.rs\n- crates/gba-core/src/state.rs\n- crates/gba-pm/src/lib.rs\n- apps/gba-cli/src/main.rs\n- apps/gba-cli/src/commands/*.rs\n\nOrganize findings by severity.\")",
+      "Bash(where:*)",
+      "Bash(codex --full-auto exec \"Review the GBA \\(Geektime Bootcamp Agent\\) implementation against the design specification in specs/design.md.\n\nFocus on these key requirements:\n\n## 1. gba-pm \\(Prompt Manager\\) - crates/gba-pm/src/lib.rs\nCheck if it implements:\n- PromptManager with minijinja template engine\n- PromptContext for template rendering\n- TaskConfig for loading config.yml\n- Template caching with parking_lot::RwLock\n- Custom filters: slugify, indent\n- Custom functions: read_file, list_files\n- load_phase_prompts for system.md and user.md\n\n## 2. gba-core \\(Core Engine\\) - crates/gba-core/src/lib.rs\nCheck if it implements:\n- AgentRunner with Claude Agent SDK integration\n- ExecutionRequest, ExecutionResult, ExecutionContext types\n- FeatureState management \\(state.yml\\)\n- Actor-based execution model with tokio\n- Phase execution logic\n- Streaming output support\n- Error handling and retry logic\n\n## 3. gba-cli \\(CLI Application\\) - apps/gba-cli/src/main.rs\nCheck if it implements:\n- init command \\(create .gba structure\\)\n- plan command \\(interactive planning with ratatui\\)\n- run command \\(execute phases with progress UI\\)\n- Git worktree support\n- Resume functionality\n\nProvide a structured review with:\n- Compliance status for each requirement\n- Missing features or gaps\n- Code quality issues\n- Security concerns\n- Recommendations for improvement\n\nFormat as a detailed review report.\")",
+      "Bash(codex --full-auto -o /tmp/review.md exec \"Perform a code review of the Rust codebase. Check:\n1. Error handling - should use thiserror for libraries, no unwrap/expect\n2. Async patterns - tokio usage, proper error handling\n3. API design - public interfaces should be clean and documented\n4. Code quality - follow Rust best practices\n\nReview files in crates/gba-core/src/, crates/gba-pm/src/, and apps/gba-cli/src/\n\nOutput a structured review with severity levels.\")",
+      "Bash(codex --full-auto:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr create:*)"
     ]
   }
 }
