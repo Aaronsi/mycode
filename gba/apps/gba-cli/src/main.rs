@@ -67,10 +67,21 @@ async fn main() -> Result<()> {
             ui::run_tui(engine).await?;
         }
         Commands::Templates => {
-            let pm = gba_pm::PromptManager::new();
-            println!("Available templates:");
-            for template in pm.list_templates() {
-                println!("  - {}", template);
+            // Look for prompts directory relative to repo path
+            let prompts_dir = engine.config().repo_path.join("prompts");
+            match gba_pm::PromptManager::new(prompts_dir) {
+                Ok(pm) => {
+                    println!("Available templates:");
+                    match pm.list_templates() {
+                        Ok(templates) => {
+                            for template in templates {
+                                println!("  - {}", template);
+                            }
+                        }
+                        Err(e) => eprintln!("Error listing templates: {}", e),
+                    }
+                }
+                Err(e) => eprintln!("Error initializing prompt manager: {}", e),
             }
         }
     }
