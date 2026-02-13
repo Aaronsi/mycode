@@ -266,6 +266,26 @@ pub struct Phase {
 }
 
 /// Core execution engine for GBA
+///
+/// The engine orchestrates Claude Agent SDK calls and manages feature execution.
+/// It provides both simple and advanced APIs for executing prompts and phases.
+///
+/// # Example
+///
+/// ```no_run
+/// use gba_core::{Config, Engine};
+///
+/// # async fn example() -> gba_core::Result<()> {
+/// let config = Config {
+///     api_key: "your-api-key".to_string(),
+///     ..Default::default()
+/// };
+/// let engine = Engine::new(config);
+/// let result = engine.execute("Hello, Claude!").await?;
+/// println!("{}", result);
+/// # Ok(())
+/// # }
+/// ```
 pub struct Engine {
     config: Config,
 }
@@ -281,16 +301,33 @@ impl std::fmt::Debug for Engine {
 
 impl Engine {
     /// Create a new engine instance
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - Configuration for the engine including API key and model settings
     pub fn new(config: Config) -> Self {
         Self { config }
     }
 
     /// Get the current configuration
+    ///
+    /// Returns a reference to the engine's configuration.
     pub fn config(&self) -> &Config {
         &self.config
     }
 
     /// Execute a task with the given prompt (simple API)
+    ///
+    /// This is a convenience method for simple prompt execution.
+    /// For more control, use `execute_request` instead.
+    ///
+    /// # Arguments
+    ///
+    /// * `prompt` - The prompt to send to Claude
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the execution fails or times out.
     #[instrument(skip(self, prompt), fields(prompt_len = prompt.len()))]
     pub async fn execute(&self, prompt: &str) -> Result<String> {
         let request = ExecutionRequest {
@@ -310,6 +347,19 @@ impl Engine {
     }
 
     /// Execute a full execution request
+    ///
+    /// This method provides full control over the execution parameters.
+    ///
+    /// # Arguments
+    ///
+    /// * `request` - The execution request containing prompt, tools, and context
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Connection to Claude fails
+    /// - Query execution fails
+    /// - Execution times out
     #[instrument(skip(self, request), fields(phase = ?request.context.phase_name))]
     pub async fn execute_request(&self, request: ExecutionRequest) -> Result<ExecutionResult> {
         let start = std::time::Instant::now();
@@ -419,6 +469,16 @@ impl Engine {
     }
 
     /// Execute multiple phases sequentially
+    ///
+    /// Executes a list of phases in order, stopping if any phase fails.
+    ///
+    /// # Arguments
+    ///
+    /// * `phases` - Vector of phases to execute
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any phase fails to execute.
     #[instrument(skip(self, phases), fields(num_phases = phases.len()))]
     pub async fn execute_phases(&self, phases: Vec<Phase>) -> Result<Vec<ExecutionResult>> {
         let mut results = Vec::with_capacity(phases.len());
