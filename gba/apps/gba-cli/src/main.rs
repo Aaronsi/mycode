@@ -1,24 +1,31 @@
-use anyhow::Result;
-use clap::{Parser, Subcommand};
+//! GBA CLI - Command Line Interface for Geektime Bootcamp Agent
+//!
+//! This is the main entry point for the GBA command-line tool.
+
 use std::path::PathBuf;
 
+use anyhow::{Context, Result};
+use clap::{Parser, Subcommand};
+use tracing_subscriber::{EnvFilter, fmt, prelude::*};
+
+mod commands;
 mod ui;
 
 #[derive(Parser)]
 #[command(name = "gba")]
-#[command(author, version, about = "Geektime Bootcamp Agent - A CLI tool for Claude Agent SDK", long_about = None)]
+#[command(
+    author,
+    version,
+    about = "Geektime Bootcamp Agent - AI-assisted feature development"
+)]
 struct Cli {
     /// Repository path to work with
-    #[arg(short, long, default_value = ".")]
+    #[arg(short, long, default_value = ".", global = true)]
     repo: PathBuf,
 
-    /// Claude API key (or set ANTHROPIC_API_KEY env var)
-    #[arg(short, long, env)]
-    api_key: Option<String>,
-
-    /// Model to use
-    #[arg(short, long, default_value = "claude-sonnet-4-5-20250929")]
-    model: String,
+    /// Enable verbose output
+    #[arg(short, long, global = true)]
+    verbose: bool,
 
     #[command(subcommand)]
     command: Commands,
@@ -26,13 +33,49 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Execute a task with a prompt
-    Execute {
-        /// The prompt to execute
-        prompt: String,
+    /// Initialize GBA in current repository
+    Init {
+        /// Force reinitialize even if .gba exists
+        #[arg(short, long)]
+        force: bool,
     },
-    /// Interactive TUI mode
+
+    /// Plan a new feature interactively
+    Plan {
+        /// Feature slug (e.g., "user-auth", "api-v2")
+        feature_slug: String,
+
+        /// Initial feature description
+        #[arg(short, long)]
+        description: Option<String>,
+    },
+
+    /// Execute a planned feature
+    Run {
+        /// Feature slug or ID to execute (e.g., "0001_user-auth" or "user-auth")
+        feature: String,
+
+        /// Resume from last checkpoint
+        #[arg(short = 'R', long)]
+        resume: bool,
+
+        /// Dry run (show what would be executed)
+        #[arg(short, long)]
+        dry_run: bool,
+    },
+
+    /// List features and their status
+    List,
+
+    /// Show feature status
+    Status {
+        /// Feature slug or ID
+        feature: Option<String>,
+    },
+
+    /// Interactive TUI mode (legacy)
     Tui,
+
     /// List available prompt templates
     Templates,
 }
@@ -41,36 +84,74 @@ enum Commands {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    // Get API key from args or environment
-    let api_key = cli.api_key.unwrap_or_else(|| {
-        std::env::var("ANTHROPIC_API_KEY")
-            .expect("ANTHROPIC_API_KEY must be set either via --api-key or environment variable")
-    });
-
-    // Create core engine config
-    let config = gba_core::Config {
-        repo_path: cli.repo,
-        api_key,
-        model: cli.model,
+    // Initialize logging
+    let filter = if cli.verbose {
+        EnvFilter::new("debug")
+    } else {
+        EnvFilter::new("info")
     };
 
-    let engine = gba_core::Engine::new(config);
+    tracing_subscriber::registry()
+        .with(fmt::layer())
+        .with(filter)
+        .init();
+
+    // Resolve repository path
+    let repo_path = cli.repo.canonicalize().unwrap_or(cli.repo.clone());
 
     match cli.command {
-        Commands::Execute { prompt } => {
-            println!("Executing prompt: {}", prompt);
-            let result = engine.execute(&prompt).await?;
-            println!("Result: {}", result);
+        Commands::Init { force } => {
+            commands::init::run(&repo_path, force).await?;
+        }
+        Commands::Plan {
+            feature_slug,
+            description,
+        } => {
+            commands::plan::run(&repo_path, &feature_slug, description).await?;
+        }
+        Commands::Run {
+            feature,
+            resume,
+            dry_run,
+        } => {
+            commands::run::run(&repo_path, &feature, resume, dry_run).await?;
+        }
+        Commands::List => {
+            commands::list::run(&repo_path)?;
+        }
+        Commands::Status { feature } => {
+            commands::status::run(&repo_path, feature.as_deref())?;
         }
         Commands::Tui => {
-            println!("Starting TUI mode...");
+            // Legacy TUI mode
+            let api_key = std::env::var("ANTHROPIC_API_KEY")
+                .context("ANTHROPIC_API_KEY must be set for TUI mode")?;
+
+            let config = gba_core::Config {
+                repo_path,
+                api_key,
+                model: "claude-sonnet-4-5-20250929".to_string(),
+                ..Default::default()
+            };
+
+            let engine = gba_core::Engine::new(config);
             ui::run_tui(engine).await?;
         }
         Commands::Templates => {
-            let pm = gba_pm::PromptManager::new();
-            println!("Available templates:");
-            for template in pm.list_templates() {
-                println!("  - {}", template);
+            let prompts_dir = repo_path.join("prompts");
+            match gba_pm::PromptManager::new(prompts_dir) {
+                Ok(pm) => {
+                    println!("Available templates:");
+                    match pm.list_templates() {
+                        Ok(templates) => {
+                            for template in templates {
+                                println!("  - {}", template);
+                            }
+                        }
+                        Err(e) => eprintln!("Error listing templates: {}", e),
+                    }
+                }
+                Err(e) => eprintln!("Error initializing prompt manager: {}", e),
             }
         }
     }
